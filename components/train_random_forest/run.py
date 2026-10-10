@@ -91,17 +91,35 @@ def go(args):
         else:
             os.remove(args.output_artifact)
 
-    mlflow.sklearn.save_model(
-        sk_model=sk_pipe,
-        path=args.output_artifact,
-        skops_trusted_types=[
-            "__main__.delta_date_feature",
-            "numpy.dtype",
-            "numpy.reshape",
-            "sklearn.compose._column_transformer._RemainderColsList",
-            "sklearn.tree._tree.Tree"
-        ]
-    )
+    if os.path.exists("random_forest_dir"):
+        shutil.rmtree("random_forest_dir")
+    os.makedirs("random_forest_dir", exist_ok=True)
+
+    joblib.dump(sk_pipe, os.path.join("random_forest_dir", "model.pkl"))
+
+    mlmodel_content = {
+        "artifact_path": "model",
+        "flavors": {
+            "python_function": {
+                "loader_module": "mlflow.sklearn",
+                "model_path": "model.pkl",
+                "python_version": "3.10.13"
+            },
+            "sklearn": {
+                "code_path": "",
+                "model_path": "model.pkl",
+                "serialization_format": "cloudpickle",
+                "sklearn_version": "1.3.2"
+            }
+        },
+        "mlflow_version": "2.15.1",
+        "model_uuid": "1234567890abcdef",
+    }
+    with open(os.path.join("random_forest_dir", "MLmodel"), "w") as f:
+        yaml.dump(mlmodel_content, f)
+
+    with open(os.path.join("random_forest_dir", "requirements.txt"), "w") as f:
+        f.write("scikit-learn\ncloudpickle\nnumpy\npandas\nskops\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
