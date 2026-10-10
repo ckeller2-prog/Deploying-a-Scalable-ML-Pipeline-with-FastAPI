@@ -4,6 +4,7 @@ import shutil
 import json
 import pandas as pd
 import wandb
+import joblib
 import mlflow
 import mlflow.sklearn
 from sklearn.ensemble import RandomForestRegressor
