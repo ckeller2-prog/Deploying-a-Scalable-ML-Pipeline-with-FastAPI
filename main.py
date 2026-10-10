@@ -40,7 +40,7 @@ def go(config: DictConfig):
             _ = mlflow.run(
                 f"{config['main']['components_repository']}/get_data",
                 "main",
-                env_manager="conda",
+                env_manager="local",
                 parameters={
                     "sample": config["etl"]["sample"],
                     "artifact_name": "sample.csv",
@@ -62,12 +62,37 @@ def go(config: DictConfig):
             pass
 
         if "data_split" in active_steps:
-            ##################
-            # Implement here #
-            ##################
-            pass
+            _ = mlflow.run(
+                f"{config['main']['components_repository']}/train_val_test_split",
+                'main',
+                env_manager="local",
+                parameters={
+                    "input": "clean_sample.csv:latest",
+                    "test_size": config['modeling']['test_size'],
+                    "random_seed": config['modeling']['random_seed'],
+                    "stratify_by": config['modeling']['stratify_by']
+                }
+            )
 
         if "train_random_forest" in active_steps:
+            rf_config = os.path.abspath("rf_config.json")
+            with open(rf_config, "w+") as fp:
+                json.dump(dict(config["modeling"]["random_forest"].items()), fp)
+            
+            _ = mlflow.run(
+                f"{config['main']['components_repository']}/train_random_forest",
+                'main',
+                env_manager="local",
+                parameters={
+                    "trainval_artifact": "trainval_data.csv:latest",
+                    "val_size": config['modeling']['val_size'],
+                    "random_seed": config['modeling']['random_seed'],
+                    "stratify_by": config['modeling']['stratify_by'],
+                    "rf_config": rf_config,
+                    "max_tfidf_features": config['modeling']['max_tfidf_features'],
+                    "output_artifact": config['modeling']['output_artifact']
+                }
+            )
 
             # NOTE: we need to serialize the random forest configuration into JSON
             rf_config = os.path.abspath("rf_config.json")

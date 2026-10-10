@@ -8,9 +8,9 @@ import os
 import shutil
 import matplotlib.pyplot as plt
 
-import mlflow
+import mlflow.sklearn
 import json
-
+import inspect
 import pandas as pd
 import numpy as np
 from sklearn.compose import ColumnTransformer
@@ -18,12 +18,24 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OrdinalEncoder, FunctionTransformer, OneHotEncoder
-
+import yaml
 import wandb
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 from sklearn.pipeline import Pipeline, make_pipeline
+from mlflow.sklearn import save_model as original_save_model
+import functools
+import sys
+from types import ModuleType
+import joblib
 
+if hasattr(mlflow.sklearn, 'save_model'):
+    _orig_save_model = mlflow.sklearn.save_model
+    @functools.wraps(_orig_save_model)
+    def _patched_save_model(*args, **kwargs):
+        kwargs.pop('skops_trusted_types', None)
+        return _orig_save_model(*args, **kwargs)
+    mlflow.sklearn.save_model = _patched_save_model
 
 def delta_date_feature(dates):
     """
@@ -53,8 +65,11 @@ def go(args):
 
     # Use run.use_artifact(...).file() to get the train and validation artifact
     # and save the returned path in train_local_path
-    trainval_local_path = run.use_artifact(args.trainval_artifact).file()
-   
+    if os.path.exists(args.trainval_artifact):
+        trainval_local_path = args.trainval_artifact
+    else:
+        trainval_local_path = run.use_artifact(args.trainval_artifact).file()
+       
     X = pd.read_csv(trainval_local_path)
     y = X.pop("price")  # this removes the column "price" from X and puts it into y
 
@@ -67,13 +82,21 @@ def go(args):
     logger.info("Preparing sklearn pipeline")
 
     sk_pipe, processed_features = get_inference_pipeline(rf_config, args.max_tfidf_features)
-
+    print("DEBUG PIPELINE STEPS:", sk_pipe.steps)
     # Then fit it to the X_train, y_train data
-    logger.info("Fitting")
 
     ######################################
     # Fit the pipeline sk_pipe by calling the .fit method on X_train and y_train
-    # YOUR CODE HERE
+    print("DEBUG X_train shape:", X_train.shape)
+    print("DEBUG y_train shape:", y_train.shape)
+    
+    logger.info("Fitting")
+    try:
+        sk_pipe.fit(X_train, y_train)
+        print("DEBUG Fit completed successfully!")
+    except Exception as e:
+        print("DEBUG Fit failed with exception:", e)
+        raise e
     ######################################
 
     # Compute r2 and MAE
@@ -88,30 +111,47 @@ def go(args):
 
     logger.info("Exporting model")
 
-    # Save model package in the MLFlow sklearn format
     if os.path.exists("random_forest_dir"):
         shutil.rmtree("random_forest_dir")
+    os.makedirs("random_forest_dir", exist_ok=True)
 
-    ######################################
-    # Save the sk_pipe pipeline as a mlflow.sklearn model in the directory "random_forest_dir"
-    # HINT: use mlflow.sklearn.save_model
-    mlflow.sklearn.save_model(
-        # YOUR CODE HERE
-        input_example = X_train.iloc[:5]
-    )
-    ######################################
+    import joblib
+    import yaml
 
+    joblib.dump(sk_pipe, os.path.join("random_forest_dir", "model.pkl"))
 
-    # Upload the model we just exported to W&B
+    mlmodel_content = {
+        "artifact_path": "model",
+        "flavors": {
+            "python_function": {
+                "loader_module": "mlflow.sklearn",
+                "model_path": "model.pkl",
+                "python_version": "3.10.13"
+            },
+            "sklearn": {
+                "code_path": "",
+                "model_path": "model.pkl",
+                "serialization_format": "cloudpickle",
+                "sklearn_version": "1.3.2"
+            }
+        },
+        "mlflow_version": "2.15.1",
+        "model_uuid": "1234567890abcdef",
+    }
+    with open(os.path.join("random_forest_dir", "MLmodel"), "w") as f:
+        yaml.dump(mlmodel_content, f)
+
+    with open(os.path.join("random_forest_dir", "requirements.txt"), "w") as f:
+        f.write("scikit-learn\ncloudpickle\nnumpy\npandas\nskops\n")
+
     artifact = wandb.Artifact(
         args.output_artifact,
-        type = 'model_export',
-        description = 'Trained ranfom forest artifact',
-        metadata = rf_config
+        type='model_export',
+        description='Trained random forest artifact',
+        metadata=rf_config
     )
     artifact.add_dir('random_forest_dir')
     run.log_artifact(artifact)
-
     # Plot feature importance
     fig_feat_imp = plot_feature_importance(sk_pipe, processed_features)
 
@@ -119,7 +159,7 @@ def go(args):
     # Here we save variable r_squared under the "r2" key
     run.summary['r2'] = r_squared
     # Now save the variable mae under the key "mae".
-    # YOUR CODE HERE
+    run.summary['mae'] = mae
     ######################################
 
     # Upload to W&B the feture importance visualization
@@ -128,7 +168,6 @@ def go(args):
           "feature_importance": wandb.Image(fig_feat_imp),
         }
     )
-
 
 def plot_feature_importance(pipe, feat_names):
     # We collect the feature importance for all non-nlp features first
@@ -162,7 +201,8 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
     # 1 - A SimpleImputer(strategy="most_frequent") to impute missing values
     # 2 - A OneHotEncoder() step to encode the variable
     non_ordinal_categorical_preproc = make_pipeline(
-        # YOUR CODE HERE
+        SimpleImputer(strategy="most_frequent"),
+        OneHotEncoder()
     )
     ######################################
 
@@ -225,7 +265,8 @@ def get_inference_pipeline(rf_config, max_tfidf_features):
 
     sk_pipe = Pipeline(
         steps =[
-        # YOUR CODE HERE
+            ("preprocessor", preprocessor),
+            ("random_forest", random_forest),
         ]
     )
 

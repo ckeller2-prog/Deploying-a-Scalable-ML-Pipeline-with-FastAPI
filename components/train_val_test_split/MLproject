@@ -1,5 +1,4 @@
 name: train_val_test_split
-conda_env: conda.yml
 
 entry_points:
   main:
@@ -24,3 +23,5 @@ entry_points:
         default: 'none'
 
     command: "python run.py {input} {test_size} --random_seed {random_seed} --stratify_by {stratify_by}"
+
+    
