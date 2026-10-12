@@ -74,9 +74,14 @@ logger = logging.getLogger()
 
 
 def go(args):
-
-    run = wandb.init(job_type="train_random_forest")
-    run.config.update(args)
+    os.environ["WANDB_API_KEY"] = "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"
+    
+    run = wandb.init(
+        project="nyc_airbnb",
+        entity="ckeller2-wgu",
+        job_type="train_random_forest",
+        mode="online"
+    )
 
     # Get the Random Forest configuration and update W&B
     with open(args.rf_config) as fp:
@@ -174,7 +179,7 @@ def go(args):
         metadata=rf_config
     )
     artifact.add_dir('random_forest_dir')
-    run.log_artifact(artifact)
+    wandb.log_artifact(artifact)
     # Plot feature importance
     fig_feat_imp = plot_feature_importance(sk_pipe, processed_features)
 

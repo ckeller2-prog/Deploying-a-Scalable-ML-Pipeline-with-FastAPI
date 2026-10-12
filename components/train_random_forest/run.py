@@ -54,7 +54,13 @@ def get_inference_pipeline(rf_config, max_tfidf_features, X_columns):
     return sk_pipe, numeric_features + categorical_features
 
 def go(args):
-    run = wandb.init(job_type="train_random_forest")
+    run = wandb.init(
+        project="nyc_airbnb",
+        entity="ckeller2-wgu",
+        job_type="train_random_forest",
+        mode="online"
+    )
+    
     run.config.update(args)
     artifact_local_path = run.use_artifact(args.trainval_artifact).file()
     train_df = pd.read_csv(artifact_local_path)
@@ -100,7 +106,6 @@ def go(args):
     if os.path.exists("random_forest_dir"):
         shutil.rmtree("random_forest_dir")
     os.makedirs("random_forest_dir", exist_ok=True)
-
     joblib.dump(sk_pipe, os.path.join("random_forest_dir", "model.pkl"))
 
     mlmodel_content = {
@@ -121,20 +126,31 @@ def go(args):
         "mlflow_version": "2.15.1",
         "model_uuid": "1234567890abcdef",
     }
+
     with open(os.path.join("random_forest_dir", "MLmodel"), "w") as f:
         yaml.dump(mlmodel_content, f)
 
     with open(os.path.join("random_forest_dir", "requirements.txt"), "w") as f:
         f.write("scikit-learn\ncloudpickle\nnumpy\npandas\nskops\n")
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--trainval_artifact", type=str, required=True)
-    parser.add_argument("--val_size", type=float, required=True)
-    parser.add_argument("--random_seed", type=int, required=True)
-    parser.add_argument("--stratify_by", type=str, required=True)
-    parser.add_argument("--rf_config", type=str, required=True)
-    parser.add_argument("--max_tfidf_features", type=int, required=True)
-    parser.add_argument("--output_artifact", type=str, required=True)
-    args = parser.parse_args()
+    artifact = wandb.Artifact(
+        name=args.output_artifact.split(":")[0],
+        type="model",
+        description="Random Forest model export"
+    )
+    artifact.add_dir("random_forest_dir")
+    run.log_artifact(artifact)
+    artifact.wait()
+
+    if __name__ == "__main__":
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--trainval_artifact", type=str, required=True)
+        parser.add_argument("--val_size", type=float, required=True)
+        parser.add_argument("--random_seed", type=int, required=True)
+        parser.add_argument("--stratify_by", type=str, required=True)
+        parser.add_argument("--rf_config", type=str, required=True)
+        parser.add_argument("--max_tfidf_features", type=int, required=True)
+        parser.add_argument("--output_artifact", type=str, required=True)
+        args = parser.parse_args()
+
     go(args)

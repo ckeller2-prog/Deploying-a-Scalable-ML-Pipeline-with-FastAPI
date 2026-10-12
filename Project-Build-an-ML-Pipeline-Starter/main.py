@@ -59,7 +59,7 @@ def go(config: DictConfig):
                 env_manager="local",
                 parameters={
                     "csv": "clean_sample.csv:latest",
-                    "ref": "clean_sample.csv:reference",
+                    "ref": "sample.csv:latest",
                     "kl_threshold": config["data_check"]["kl_threshold"],
                     "min_price": config["etl"]["min_price"],
                     "max_price": config["etl"]["max_price"],
@@ -67,7 +67,7 @@ def go(config: DictConfig):
             )
 
         if "data_split" in active_steps:
-            _ = mlflow.run(
+        _ = mlflow.run(
             f"{config['main']['components_repository']}/train_val_test_split",
             'main',
             env_manager="local",
@@ -83,17 +83,25 @@ def go(config: DictConfig):
             rf_config = os.path.abspath("rf_config.json")
             with open(rf_config, "w+") as fp:
                 json.dump(dict(config["modeling"]["random_forest"].items()), fp)
-            pass
-
+            
             _ = mlflow.run(
             f"{config['main']['components_repository']}/train_random_forest",
             'main',
             env_manager="local",
+            env_dict = {
+                **os.environ,
+                "WANDB_API_KEY": os.environment.get("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")
+                "WANDB_PROJECT": config["main"]["project_name"],
+                "WANDB_RUN_GROUP": config["main"]["experiment_name"],
+                "WANDB_MODE": "online",
+            },
             parameters={
-                "train_data": "train.csv:latest", 
-                "model_config": rf_config,
-                "random_seed": config['modeling']['random_seed'],
+                "trainval_artifact": "trainval_data.csv:latest",
                 "val_size": config['modeling']['val_size'] 
+                "random_seed": config['modeling']['random_seed'],
+                "stratify_by": config['modeling']['stratify_by'],
+                "rf_config": rf_config,
+                "output_artifact": "random_forest_export",
             }
         )
 
