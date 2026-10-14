@@ -34,7 +34,9 @@ def go(args):
     y_test = X_test.pop("price")
 
     logger.info("Loading model and performing inference on test set")
-    sk_pipe = mlflow.sklearn.load_model(model_local_path)
+    import joblib
+    model_file_path = os.path.join(model_local_path, "model.pkl")
+    sk_pipe = joblib.load(model_file_path)
     y_pred = sk_pipe.predict(X_test)
 
     logger.info("Scoring")
