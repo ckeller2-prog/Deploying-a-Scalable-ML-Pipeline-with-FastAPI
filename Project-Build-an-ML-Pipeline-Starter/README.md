@@ -179,3 +179,7 @@ Please, make sure all steps are using **the same** python version and that you h
 ## License
 
 [License](LICENSE.txt)
+
+## Project Links
+- **Weights & Biases Project**: [W&B NYC Airbnb Project](https://forge.coreweave.com/wandb/ckeller2-wgu/nyc_airbnb?nw=nwuserckeller2)
+- **GitHub Repository**: [GitHub - NYC Airbnb Pipeline](https://github.com/ckeller2-prog/Project-Build-an-ML-Pipeline-Starter)
