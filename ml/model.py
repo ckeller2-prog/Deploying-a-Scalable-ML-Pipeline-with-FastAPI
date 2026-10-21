@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import fbeta_score, precision_score, recall_score
 from sklearn.ensemble import RandomForestClassifier
+from ml.data import process_data
 
 def train_model(X_train, y_train, **kwargs):
     """
@@ -97,7 +98,7 @@ def load_model(path):
     """
     return joblib.load(path)
 
-def performance_on_categorical_slice(df, feature, target_col, model, encoder=None):
+def performance_on_categorical_slice(df, feature, target_col, model, encoder=None, lb=None):
     """
     Computes performance metrics on slices of the data for a given categorical feature.
 
@@ -113,19 +114,39 @@ def performance_on_categorical_slice(df, feature, target_col, model, encoder=Non
         Trained machine learning model.
     encoder : fitted encoder, optional
         Fitted OneHotEncoder or preprocessor.
+    lb : fitted LabelBinarizer, optional
+        Fitted LabelBinarizer.
 
     Returns
     -------
     slice_metrics : dict
         Dictionary containing metrics for each unique value of the feature.
     """
+    cat_features = [
+        "workclass",
+        "education",
+        "marital-status",
+        "occupation",
+        "relationship",
+        "race",
+        "sex",
+        "native-country",
+    ]
+
     slice_metrics = {}
     for val in df[feature].unique():
         df_slice = df[df[feature] == val]
         if len(df_slice) == 0:
             continue
-        X_slice = df_slice.drop(columns=[target_col])
-        y_slice = df_slice[target_col]
+
+        X_slice, y_slice, _, _ = process_data(
+            df_slice, 
+            categorical_features=cat_features, 
+            label=target_col, 
+            training=False, 
+            encoder=encoder, 
+            lb=lb
+        )
         
         preds = inference(model, X_slice)
         precision, recall, fbeta = compute_model_metrics(y_slice, preds)
