@@ -134,23 +134,25 @@ def go(args):
         f.write("scikit-learn\ncloudpickle\nnumpy\npandas\nskops\n")
 
     artifact = wandb.Artifact(
-        name=args.output_artifact.split(":")[0],
+        name="model_export",
         type="model",
         description="Random Forest model export"
     )
     artifact.add_dir("random_forest_dir")
-    run.log_artifact(artifact)
-    artifact.wait()
+    
+    logged_artifact = run.log_artifact(artifact, aliases=["latest"])
+    logged_artifact.wait()
+    wandb.finish()
 
-    if __name__ == "__main__":
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--trainval_artifact", type=str, required=True)
-        parser.add_argument("--val_size", type=float, required=True)
-        parser.add_argument("--random_seed", type=int, required=True)
-        parser.add_argument("--stratify_by", type=str, required=True)
-        parser.add_argument("--rf_config", type=str, required=True)
-        parser.add_argument("--max_tfidf_features", type=int, required=True)
-        parser.add_argument("--output_artifact", type=str, required=True)
-        args = parser.parse_args()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--trainval_artifact", type=str, required=True)
+    parser.add_argument("--val_size", type=float, required=True)
+    parser.add_argument("--random_seed", type=int, required=True)
+    parser.add_argument("--stratify_by", type=str, required=True)
+    parser.add_argument("--rf_config", type=str, required=True)
+    parser.add_argument("--max_tfidf_features", type=int, required=True)
+    parser.add_argument("--output_artifact", type=str, required=True)
+    args = parser.parse_args()
 
     go(args)

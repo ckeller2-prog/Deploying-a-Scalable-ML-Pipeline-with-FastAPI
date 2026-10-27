@@ -24,10 +24,4 @@ entry_points:
         description: Maximum accepted price
         type: float
 
-    command: >-
-      PYTHONPATH=../.. pytest test_data.py \
-        --csv="{csv}" \
-        --ref="{ref}" \
-        --kl_threshold={kl_threshold} \
-        --min_price={min_price} \
-        --max_price={max_price}
+    command: "python run.py --csv {csv} --ref {ref} --kl_threshold {kl_threshold} --min_price {min_price} --max_price {max_price}"

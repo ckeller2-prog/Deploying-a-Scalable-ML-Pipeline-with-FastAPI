@@ -1,128 +1,73 @@
 import os
-# Prevent git from walking up to parent directories and triggering git repo checks
-os.environ["GIT_CEILING_DIRECTORIES"] = "/home"
+import pandas as pd
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+from ml.data import process_data
+from ml.model import inference, load_model
 
-import json
-import mlflow
-import tempfile
-import pathlib
-import wandb
-import hydra
-from omegaconf import DictConfig
+print("Initializing FastAPI app...")
 
-_steps = [
-    "download",
-    "basic_cleaning",
-    "data_check",
-    "data_split",
-    "train_random_forest",
-    "test_regression_model"
-]
+class Data(BaseModel):
+    age: int = Field(..., example=39)
+    workclass: str = Field(..., example="State-gov")
+    fnlwgt: int = Field(..., example=77516)
+    education: str = Field(..., example="Bachelors")
+    education_num: int = Field(..., example=13, alias="education-num")
+    marital_status: str = Field(..., example="Never-married", alias="marital-status")
+    occupation: str = Field(..., example="Adm-clerical")
+    relationship: str = Field(..., example="Not-in-family")
+    race: str = Field(..., example="White")
+    sex: str = Field(..., example="Male")
+    capital_gain: int = Field(..., example=2174, alias="capital-gain")
+    capital_loss: int = Field(..., example=0, alias="capital-loss")
+    hours_per_week: int = Field(..., example=40, alias="hours-per-week")
+    native_country: str = Field(..., example="United-States", alias="native-country")
 
-@hydra.main(version_base=None, config_name='config', config_path='.')
-def go(config: DictConfig):
+encoder = load_model("model/encoder.pkl")
+model = load_model("model/model.pkl")
 
-    os.environ["WANDB_PROJECT"] = config["main"]["project_name"]
-    os.environ["WANDB_RUN_GROUP"] = config["main"]["experiment_name"]
+app = FastAPI()
 
-    steps_par = config['main']['steps']
-    active_steps = steps_par.split(",") if steps_par != "all" else _steps
+encoder = None
+model = None
 
-    cwd = pathlib.Path(hydra.utils.get_original_cwd())
+@app.on_event("startup")
+async def startup_event():
+    global encoder, model
+    print("Loading encoder and model from disk...")
+    encoder = load_model("model/encoder.pkl")
+    model = load_model("model/model.pkl")
+    print("Model and encoder loaded successfully!")
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
+@app.get("/")
+async def get_root():
+    return {"greeting": "Welcome to the Census Income Prediction API!"}
 
-        if "download" in active_steps:
-            _ = mlflow.run(
-                str(cwd / "components" / "get_data"),
-                "main",
-                version=None,
-                env_manager="local",
-                parameters={
-                    "sample": config["etl"]["sample"],
-                    "artifact_name": "sample.csv",
-                    "artifact_type": "raw_data",
-                    "artifact_description": "Raw file as downloaded"
-                },
-            )
-
-        if "basic_cleaning" in active_steps:
-            _ = mlflow.run(
-                str(cwd / "src" / "basic_cleaning"),
-                "main",
-                version=None,
-                env_manager="local",
-                parameters={
-                    "input_artifact": "sample.csv:latest",
-                    "output_artifact": "clean_sample.csv",
-                    "output_type": "dataset",
-                    "output_description": "Cleaned sample of Airbnb data",
-                    "min_price": config["etl"]["min_price"],
-                    "max_price": config["etl"]["max_price"],
-                },
-            )
-                     
-        if "data_check" in active_steps:
-            _ = mlflow.run(
-                str(cwd / "src" / "data_check"),
-                "main",
-                version=None,
-                env_manager="local",
-                parameters={
-                    "csv": "clean_sample.csv:latest",
-                    "ref": "clean_sample.csv:latest",
-                    "kl_threshold": config["data_check"]["kl_threshold"],
-                    "min_price": config["etl"]["min_price"],
-                    "max_price": config["etl"]["max_price"],
-                },
-            )
-
-        if "data_split" in active_steps:
-            _ = mlflow.run(
-                str(cwd / "components" / "train_val_test_split"),
-                'main',
-                version=None,
-                env_manager="local",
-                parameters={
-                    "input": "clean_sample.csv:latest",
-                    "test_size": config['modeling']['test_size'],
-                    "random_seed": config['modeling']['random_seed'],
-                    "stratify_by": config['modeling']['stratify_by']
-                }
-            )
-
-        if "train_random_forest" in active_steps:
-            rf_config = os.path.abspath("rf_config.json")
-            with open(rf_config, "w+") as fp:
-                json.dump(dict(config["modeling"]["random_forest"].items()), fp)
-            
-            _ = mlflow.run(
-                str(cwd / "components" / "train_random_forest"),
-                'main',
-                version=None,                
-                env_manager="local",
-                parameters={
-                    "trainval_artifact": "trainval_data.csv:latest",
-                    "val_size": config['modeling']['val_size'],
-                    "random_seed": config['modeling']['random_seed'],
-                    "stratify_by": config['modeling']['stratify_by'],
-                    "rf_config": rf_config,
-                    "max_tfidf_features": config['modeling']['max_tfidf_features'],
-                    "output_artifact": "random_forest_export"
-                }
-            )
-
-        if "test_regression_model" in active_steps:
-            _ = mlflow.run(
-                str(cwd / "components" / "test_regression_model"),
-                'main',
-                version=None,
-                env_manager="local",
-                parameters={
-                    "mlflow_model": "random_forest_export:latest",
-                    "test_dataset": "test_data.csv:latest"
-                }
-            )
-            
-if __name__ == "__main__":
-    go()
+@app.post("/predict/")
+async def post_inference(data: Data):
+    global encoder, model
+    data_dict = data.dict(by_alias=True)
+    df = pd.DataFrame.from_dict({k: [v] for k, v in data_dict.items()})
+    
+    cat_features = [
+        "workclass",
+        "education",
+        "marital-status",
+        "occupation",
+        "relationship",
+        "race",
+        "sex",
+        "native-country",
+    ]
+    
+    X_processed, _, _ = process_data(
+        df,
+        categorical_features=cat_features,
+        training=False,
+        encoder=encoder
+    )
+    
+    preds = inference(model, X_processed)
+    prediction = ">50K" if preds[0] == 1 else "<=50K"
+    
+    return {"result": prediction}

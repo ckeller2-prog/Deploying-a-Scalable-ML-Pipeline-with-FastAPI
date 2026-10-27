@@ -179,3 +179,8 @@ Please, make sure all steps are using **the same** python version and that you h
 ## License
 
 [License](LICENSE.txt)
+
+## Submission Links
+W&B link - https://forge.coreweave.com/wandb/ckeller2-wgu/nyc_airbnb?nw=nwuserckeller2
+Git hub link - https://github.com/ckeller2-prog/Project-Build-an-ML-Pipeline-Starter/tree/main
+
