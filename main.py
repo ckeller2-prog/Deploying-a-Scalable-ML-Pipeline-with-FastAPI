@@ -45,7 +45,6 @@ async def get_root():
 
 @app.post("/predict/")
 async def post_inference(data: Data):
-    global encoder, model
     data_dict = data.dict(by_alias=True)
     df = pd.DataFrame.from_dict({k: [v] for k, v in data_dict.items()})
     
@@ -59,7 +58,7 @@ async def post_inference(data: Data):
         "sex",
         "native-country",
     ]
-    
+
     X_processed, _, _ = process_data(
         df,
         categorical_features=cat_features,
@@ -72,5 +71,5 @@ async def post_inference(data: Data):
         prediction = ">50K"
     else:
         prediction = "<=50K"
-
+        
     return {"result": prediction}
