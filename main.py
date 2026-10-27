@@ -68,6 +68,9 @@ async def post_inference(data: Data):
     )
     
     preds = inference(model, X_processed)
-    prediction = ">50K" if preds[0] == 1 else "<=50K"
-    
+    if preds[0] == 1:
+        prediction = ">50K"
+    else:
+        prediction = "<=50K"
+
     return {"result": prediction}
