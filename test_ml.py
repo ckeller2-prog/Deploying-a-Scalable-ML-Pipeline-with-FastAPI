@@ -50,9 +50,11 @@ def test_train_model(sample_data):
     assert isinstance(model, RandomForestClassifier)
 
 def test_compute_model_metrics():
-    y_true = np.array([0, 1, 1, 0, 1])
-    y_pred = np.array([0, 1, 0, 0, 1])
-    precision, recall, fbeta = compute_model_metrics(y_true, y_pred)
-    assert 0.0 <= precision <= 1.0
-    assert 0.0 <= recall <= 1.0
-    assert 0.0 <= fbeta <= 1.0
+    y_true = [0, 1, 1, 0, 1]
+    y_pred = [0, 1, 1, 0, 0] 
+
+    precision, recall, f1 = compute_model_metrics(y_true, y_pred)
+
+    assert precision == pytest.approx(1.0)
+    assert recall == pytest.approx(2 / 3)
+    assert f1 == pytest.approx(0.8)
